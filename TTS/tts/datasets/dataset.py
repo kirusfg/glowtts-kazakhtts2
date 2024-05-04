@@ -40,14 +40,18 @@ def noise_augment_audio(wav):
 
 def string2filename(string):
     # generate a safe and reversible filename based on a string
-    filename = base64.urlsafe_b64encode(string.encode("utf-8")).decode("utf-8", "ignore")
+    filename = base64.urlsafe_b64encode(string.encode("utf-8")).decode(
+        "utf-8", "ignore"
+    )
     return filename
 
 
 def get_audio_size(audiopath):
     extension = audiopath.rpartition(".")[-1].lower()
     if extension not in {"mp3", "wav", "flac"}:
-        raise RuntimeError(f"The audio format {extension} is not supported, please convert the audio files to mp3, flac, or wav format!")
+        raise RuntimeError(
+            f"The audio format {extension} is not supported, please convert the audio files to mp3, flac, or wav format!"
+        )
 
     audio_info = mutagen.File(audiopath).info
     return int(audio_info.length * audio_info.sample_rate)
@@ -168,16 +172,25 @@ class TTSDataset(Dataset):
 
         if self.tokenizer.use_phonemes:
             self.phoneme_dataset = PhonemeDataset(
-                self.samples, self.tokenizer, phoneme_cache_path, precompute_num_workers=precompute_num_workers
+                self.samples,
+                self.tokenizer,
+                phoneme_cache_path,
+                precompute_num_workers=precompute_num_workers,
             )
 
         if compute_f0:
             self.f0_dataset = F0Dataset(
-                self.samples, self.ap, cache_path=f0_cache_path, precompute_num_workers=precompute_num_workers
+                self.samples,
+                self.ap,
+                cache_path=f0_cache_path,
+                precompute_num_workers=precompute_num_workers,
             )
         if compute_energy:
             self.energy_dataset = EnergyDataset(
-                self.samples, self.ap, cache_path=energy_cache_path, precompute_num_workers=precompute_num_workers
+                self.samples,
+                self.ap,
+                cache_path=energy_cache_path,
+                precompute_num_workers=precompute_num_workers,
             )
         if self.verbose:
             self.print_logs()
@@ -359,8 +372,12 @@ class TTSDataset(Dataset):
         # sort items based on the sequence length in ascending order
         text_lengths = [i["text_length"] for i in samples]
         audio_lengths = [i["audio_length"] for i in samples]
-        text_ignore_idx, text_keep_idx = self.filter_by_length(text_lengths, self.min_text_len, self.max_text_len)
-        audio_ignore_idx, audio_keep_idx = self.filter_by_length(audio_lengths, self.min_audio_len, self.max_audio_len)
+        text_ignore_idx, text_keep_idx = self.filter_by_length(
+            text_lengths, self.min_text_len, self.max_text_len
+        )
+        audio_ignore_idx, audio_keep_idx = self.filter_by_length(
+            audio_lengths, self.min_audio_len, self.max_audio_len
+        )
         keep_idx = list(set(audio_keep_idx) & set(text_keep_idx))
         ignore_idx = list(set(audio_ignore_idx) | set(text_ignore_idx))
 
@@ -409,7 +426,9 @@ class TTSDataset(Dataset):
             batch (Dict): Batch returned by `__getitem__`.
             text_lengths (List[int]): Lengths of the input character sequences.
         """
-        text_lengths, ids_sorted_decreasing = torch.sort(torch.LongTensor(text_lengths), dim=0, descending=True)
+        text_lengths, ids_sorted_decreasing = torch.sort(
+            torch.LongTensor(text_lengths), dim=0, descending=True
+        )
         batch = [batch[idx] for idx in ids_sorted_decreasing]
         return batch, text_lengths, ids_sorted_decreasing
 
@@ -427,26 +446,34 @@ class TTSDataset(Dataset):
             token_ids_lengths = np.array([len(d["token_ids"]) for d in batch])
 
             # sort items with text input length for RNN efficiency
-            batch, token_ids_lengths, ids_sorted_decreasing = self._sort_batch(batch, token_ids_lengths)
+            batch, token_ids_lengths, ids_sorted_decreasing = self._sort_batch(
+                batch, token_ids_lengths
+            )
 
             # convert list of dicts to dict of lists
             batch = {k: [dic[k] for dic in batch] for k in batch[0]}
 
             # get language ids from language names
             if self.language_id_mapping is not None:
-                language_ids = [self.language_id_mapping[ln] for ln in batch["language_name"]]
+                language_ids = [
+                    self.language_id_mapping[ln] for ln in batch["language_name"]
+                ]
             else:
                 language_ids = None
             # get pre-computed d-vectors
             if self.d_vector_mapping is not None:
                 embedding_keys = list(batch["audio_unique_name"])
-                d_vectors = [self.d_vector_mapping[w]["embedding"] for w in embedding_keys]
+                d_vectors = [
+                    self.d_vector_mapping[w]["embedding"] for w in embedding_keys
+                ]
             else:
                 d_vectors = None
 
             # get numerical speaker ids from speaker names
             if self.speaker_id_mapping:
-                speaker_ids = [self.speaker_id_mapping[sn] for sn in batch["speaker_name"]]
+                speaker_ids = [
+                    self.speaker_id_mapping[sn] for sn in batch["speaker_name"]
+                ]
             else:
                 speaker_ids = None
             # compute features
@@ -456,14 +483,17 @@ class TTSDataset(Dataset):
 
             # lengths adjusted by the reduction factor
             mel_lengths_adjusted = [
-                m.shape[1] + (self.outputs_per_step - (m.shape[1] % self.outputs_per_step))
+                m.shape[1]
+                + (self.outputs_per_step - (m.shape[1] % self.outputs_per_step))
                 if m.shape[1] % self.outputs_per_step
                 else m.shape[1]
                 for m in mel
             ]
 
             # compute 'stop token' targets
-            stop_targets = [np.array([0.0] * (mel_len - 1) + [1.0]) for mel_len in mel_lengths]
+            stop_targets = [
+                np.array([0.0] * (mel_len - 1) + [1.0]) for mel_len in mel_lengths
+            ]
 
             # PAD stop targets
             stop_targets = prepare_stop_target(stop_targets, self.outputs_per_step)
@@ -497,7 +527,9 @@ class TTSDataset(Dataset):
             # compute linear spectrogram
             linear = None
             if self.compute_linear_spec:
-                linear = [self.ap.spectrogram(w).astype("float32") for w in batch["wav"]]
+                linear = [
+                    self.ap.spectrogram(w).astype("float32") for w in batch["wav"]
+                ]
                 linear = prepare_tensor(linear, self.outputs_per_step)
                 linear = linear.transpose(0, 2, 1)
                 assert mel.shape[1] == linear.shape[1]
@@ -512,7 +544,9 @@ class TTSDataset(Dataset):
                 wav_padded = torch.zeros(len(batch["wav"]), 1, max_wav_len)
                 for i, w in enumerate(batch["wav"]):
                     mel_length = mel_lengths_adjusted[i]
-                    w = np.pad(w, (0, self.ap.hop_length * self.outputs_per_step), mode="edge")
+                    w = np.pad(
+                        w, (0, self.ap.hop_length * self.outputs_per_step), mode="edge"
+                    )
                     w = w[: mel_length * self.ap.hop_length]
                     wav_padded[i, :, : w.shape[0]] = torch.from_numpy(w)
                 wav_padded.transpose_(1, 2)
@@ -520,14 +554,18 @@ class TTSDataset(Dataset):
             # format F0
             if self.compute_f0:
                 pitch = prepare_data(batch["pitch"])
-                assert mel.shape[1] == pitch.shape[1], f"[!] {mel.shape} vs {pitch.shape}"
+                assert (
+                    mel.shape[1] == pitch.shape[1]
+                ), f"[!] {mel.shape} vs {pitch.shape}"
                 pitch = torch.FloatTensor(pitch)[:, None, :].contiguous()  # B x 1 xT
             else:
                 pitch = None
             # format energy
             if self.compute_energy:
                 energy = prepare_data(batch["energy"])
-                assert mel.shape[1] == energy.shape[1], f"[!] {mel.shape} vs {energy.shape}"
+                assert (
+                    mel.shape[1] == energy.shape[1]
+                ), f"[!] {mel.shape} vs {energy.shape}"
                 energy = torch.FloatTensor(energy)[:, None, :].contiguous()  # B x 1 xT
             else:
                 energy = None
@@ -538,7 +576,9 @@ class TTSDataset(Dataset):
                 for idx, attn in enumerate(attns):
                     pad2 = mel.shape[1] - attn.shape[1]
                     pad1 = token_ids.shape[1] - attn.shape[0]
-                    assert pad1 >= 0 and pad2 >= 0, f"[!] Negative padding - {pad1} and {pad2}"
+                    assert (
+                        pad1 >= 0 and pad2 >= 0
+                    ), f"[!] Negative padding - {pad1} and {pad2}"
                     attn = np.pad(attn, [[0, pad1], [0, pad2]])
                     attns[idx] = attn
                 attns = prepare_tensor(attns, self.outputs_per_step)
@@ -567,9 +607,7 @@ class TTSDataset(Dataset):
         raise TypeError(
             (
                 "batch must contain tensors, numbers, dicts or lists;\
-                         found {}".format(
-                    type(batch[0])
-                )
+                         found {}".format(type(batch[0]))
             )
         )
 
@@ -610,9 +648,18 @@ class PhonemeDataset(Dataset):
 
     def __getitem__(self, index):
         item = self.samples[index]
-        ids = self.compute_or_load(string2filename(item["audio_unique_name"]), item["text"], item["language"])
+        ids = self.compute_or_load(
+            string2filename(item["audio_unique_name"]), item["text"], item["language"]
+        )
+        if len(ids) == 0:
+            print(f"Item must be removed from metadata.csv: {str(item)} => {str(ids)}")
         ph_hat = self.tokenizer.ids_to_text(ids)
-        return {"text": item["text"], "ph_hat": ph_hat, "token_ids": ids, "token_ids_len": len(ids)}
+        return {
+            "text": item["text"],
+            "ph_hat": ph_hat,
+            "token_ids": ids,
+            "token_ids_len": len(ids),
+        }
 
     def __len__(self):
         return len(self.samples)
@@ -642,9 +689,14 @@ class PhonemeDataset(Dataset):
         """
         print("[*] Pre-computing phonemes...")
         with tqdm.tqdm(total=len(self)) as pbar:
-            batch_size = num_workers if num_workers > 0 else 1
+            # batch_size = num_workers if num_workers > 0 else 1
+            batch_size = 16
             dataloder = torch.utils.data.DataLoader(
-                batch_size=batch_size, dataset=self, shuffle=False, num_workers=num_workers, collate_fn=self.collate_fn
+                batch_size=batch_size,
+                dataset=self,
+                shuffle=False,
+                num_workers=32,
+                collate_fn=self.collate_fn,
             )
             for _ in dataloder:
                 pbar.update(batch_size)
@@ -719,9 +771,13 @@ class F0Dataset:
 
     def __getitem__(self, idx):
         item = self.samples[idx]
-        f0 = self.compute_or_load(item["audio_file"], string2filename(item["audio_unique_name"]))
+        f0 = self.compute_or_load(
+            item["audio_file"], string2filename(item["audio_unique_name"])
+        )
         if self.normalize_f0:
-            assert self.mean is not None and self.std is not None, " [!] Mean and STD is not available"
+            assert (
+                self.mean is not None and self.std is not None
+            ), " [!] Mean and STD is not available"
             f0 = self.normalize(f0)
         return {"audio_unique_name": item["audio_unique_name"], "f0": f0}
 
@@ -736,7 +792,11 @@ class F0Dataset:
             normalize_f0 = self.normalize_f0
             self.normalize_f0 = False
             dataloder = torch.utils.data.DataLoader(
-                batch_size=batch_size, dataset=self, shuffle=False, num_workers=num_workers, collate_fn=self.collate_fn
+                batch_size=batch_size,
+                dataset=self,
+                shuffle=False,
+                num_workers=num_workers,
+                collate_fn=self.collate_fn,
             )
             computed_data = []
             for batch in dataloder:
@@ -746,10 +806,16 @@ class F0Dataset:
             self.normalize_f0 = normalize_f0
 
         if self.normalize_f0:
-            computed_data = [tensor for batch in computed_data for tensor in batch]  # flatten
+            computed_data = [
+                tensor for batch in computed_data for tensor in batch
+            ]  # flatten
             pitch_mean, pitch_std = self.compute_pitch_stats(computed_data)
             pitch_stats = {"mean": pitch_mean, "std": pitch_std}
-            np.save(os.path.join(self.cache_path, "pitch_stats"), pitch_stats, allow_pickle=True)
+            np.save(
+                os.path.join(self.cache_path, "pitch_stats"),
+                pitch_stats,
+                allow_pickle=True,
+            )
 
     def get_pad_id(self):
         return self.pad_id
@@ -812,7 +878,11 @@ class F0Dataset:
         f0s_torch = torch.LongTensor(len(f0s), f0_lens_max).fill_(self.get_pad_id())
         for i, f0_len in enumerate(f0_lens):
             f0s_torch[i, :f0_len] = torch.LongTensor(f0s[i])
-        return {"audio_unique_name": audio_unique_name, "f0": f0s_torch, "f0_lens": f0_lens}
+        return {
+            "audio_unique_name": audio_unique_name,
+            "f0": f0s_torch,
+            "f0_lens": f0_lens,
+        }
 
     def print_logs(self, level: int = 0) -> None:
         indent = "\t" * level
@@ -870,9 +940,13 @@ class EnergyDataset:
 
     def __getitem__(self, idx):
         item = self.samples[idx]
-        energy = self.compute_or_load(item["audio_file"], string2filename(item["audio_unique_name"]))
+        energy = self.compute_or_load(
+            item["audio_file"], string2filename(item["audio_unique_name"])
+        )
         if self.normalize_energy:
-            assert self.mean is not None and self.std is not None, " [!] Mean and STD is not available"
+            assert (
+                self.mean is not None and self.std is not None
+            ), " [!] Mean and STD is not available"
             energy = self.normalize(energy)
         return {"audio_unique_name": item["audio_unique_name"], "energy": energy}
 
@@ -887,7 +961,11 @@ class EnergyDataset:
             normalize_energy = self.normalize_energy
             self.normalize_energy = False
             dataloder = torch.utils.data.DataLoader(
-                batch_size=batch_size, dataset=self, shuffle=False, num_workers=num_workers, collate_fn=self.collate_fn
+                batch_size=batch_size,
+                dataset=self,
+                shuffle=False,
+                num_workers=num_workers,
+                collate_fn=self.collate_fn,
             )
             computed_data = []
             for batch in dataloder:
@@ -897,10 +975,16 @@ class EnergyDataset:
             self.normalize_energy = normalize_energy
 
         if self.normalize_energy:
-            computed_data = [tensor for batch in computed_data for tensor in batch]  # flatten
+            computed_data = [
+                tensor for batch in computed_data for tensor in batch
+            ]  # flatten
             energy_mean, energy_std = self.compute_energy_stats(computed_data)
             energy_stats = {"mean": energy_mean, "std": energy_std}
-            np.save(os.path.join(self.cache_path, "energy_stats"), energy_stats, allow_pickle=True)
+            np.save(
+                os.path.join(self.cache_path, "energy_stats"),
+                energy_stats,
+                allow_pickle=True,
+            )
 
     def get_pad_id(self):
         return self.pad_id
@@ -914,7 +998,12 @@ class EnergyDataset:
     @staticmethod
     def _compute_and_save_energy(ap, wav_file, energy_file=None):
         wav = ap.load_wav(wav_file)
-        energy = calculate_energy(wav, fft_size=ap.fft_size, hop_length=ap.hop_length, win_length=ap.win_length)
+        energy = calculate_energy(
+            wav,
+            fft_size=ap.fft_size,
+            hop_length=ap.hop_length,
+            win_length=ap.win_length,
+        )
         if energy_file:
             np.save(energy_file, energy)
         return energy
@@ -961,10 +1050,16 @@ class EnergyDataset:
         energys = [item["energy"] for item in batch]
         energy_lens = [len(item["energy"]) for item in batch]
         energy_lens_max = max(energy_lens)
-        energys_torch = torch.LongTensor(len(energys), energy_lens_max).fill_(self.get_pad_id())
+        energys_torch = torch.LongTensor(len(energys), energy_lens_max).fill_(
+            self.get_pad_id()
+        )
         for i, energy_len in enumerate(energy_lens):
             energys_torch[i, :energy_len] = torch.LongTensor(energys[i])
-        return {"audio_unique_name": audio_unique_name, "energy": energys_torch, "energy_lens": energy_lens}
+        return {
+            "audio_unique_name": audio_unique_name,
+            "energy": energys_torch,
+            "energy_lens": energy_lens,
+        }
 
     def print_logs(self, level: int = 0) -> None:
         indent = "\t" * level

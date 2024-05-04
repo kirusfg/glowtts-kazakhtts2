@@ -170,3 +170,10 @@ depot/*
 coqui_recipes/*
 local_scripts/*
 coqui_demos/*
+
+*.wav
+*.zip
+*.pkl
+
+glow-tts-*/
+outputs/
